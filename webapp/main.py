@@ -125,6 +125,8 @@ async def api_listings(
     neighborhood: Optional[str] = None,
     source: Optional[str] = None,
     min_discount: Optional[float] = None,
+    condition: Optional[str] = None,
+    pricing: str = "referencia",
 ):
     try:
         with DatabaseManager() as db:
@@ -132,8 +134,19 @@ async def api_listings(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
+    nb_path = Path(__file__).parent.parent / "config" / "neighborhood_prices.json"
+    fallback = json.loads(nb_path.read_text(encoding="utf-8"))
+
+    if pricing == "mercado":
+        from analysis.price_calculator import compute_market_averages
+        avg_prices = compute_market_averages(listings, fallback)
+    else:
+        avg_prices = fallback
+
     result = []
     for l in listings:
+        avg = avg_prices.get(l.neighborhood, 0)
+        discount_pct = round((1 - l.price_m2 / avg) * 100, 1) if avg > 0 else None
         row = {
             "id": l.id,
             "source": l.source,
@@ -143,13 +156,18 @@ async def api_listings(
             "rooms": l.rooms,
             "neighborhood": l.neighborhood,
             "price_m2": round(l.price_m2, 0),
+            "avg_price_m2": round(avg, 0) if avg > 0 else None,
+            "discount_percentage": discount_pct,
             "url": l.url,
+            "condition": l.condition,
             "first_seen": l.first_seen.isoformat() if l.first_seen else None,
             "last_seen": l.last_seen.isoformat() if l.last_seen else None,
         }
         if neighborhood and l.neighborhood != neighborhood:
             continue
         if source and l.source != source:
+            continue
+        if condition and l.condition != condition:
             continue
         result.append(row)
 
@@ -185,13 +203,36 @@ async def api_opportunities(pricing: str = "referencia"):
                     "price_m2":            round(opp["listing"].price_m2, 0),
                     "url":                 opp["listing"].url,
                     "avg_price_m2":        opp["avg_price_m2"],
+                    "condition":            opp["listing"].condition,
                 }
                 for opp in raw_opps
             ]
             return {"opportunities": rows, "total": len(rows)}
         else:
+            nb_path = Path(__file__).parent.parent / "config" / "neighborhood_prices.json"
+            ref_prices = json.loads(nb_path.read_text(encoding="utf-8"))
             with DatabaseManager() as db:
-                rows = db.get_opportunities()
+                listings = db.get_all_listings()
+            raw_opps = detect_opportunities(listings, ref_prices)
+            rows = [
+                {
+                    "opp_id":              opp["listing"].id,
+                    "discount_percentage": opp["discount_percentage"],
+                    "detected_at":         None,
+                    "listing_id":          opp["listing"].id,
+                    "source":              opp["listing"].source,
+                    "title":               opp["listing"].title,
+                    "price_usd":           opp["listing"].price_usd,
+                    "surface_m2":          opp["listing"].surface_m2,
+                    "rooms":               opp["listing"].rooms,
+                    "neighborhood":        opp["listing"].neighborhood,
+                    "price_m2":            round(opp["listing"].price_m2, 0),
+                    "url":                 opp["listing"].url,
+                    "avg_price_m2":        opp["avg_price_m2"],
+                    "condition":           opp["listing"].condition,
+                }
+                for opp in raw_opps
+            ]
             return {"opportunities": rows, "total": len(rows)}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))

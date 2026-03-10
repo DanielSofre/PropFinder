@@ -1,25 +1,42 @@
 {
   "surface_weights": {
-    "covered":    1.00,
-    "semicovered": 0.50,
-    "uncovered":  0.30
+    "covered": 1,
+    "semicovered": 0.5,
+    "uncovered": 0.3
   },
   "opportunity": {
-    "min_discount_pct": 20.0,
-    "min_rooms": 2,
-    "max_rooms": 3,
-    "min_surface_m2": 35.0,
-    "max_surface_m2": 90.0,
-    "max_price_usd": 150000.0
+    "min_discount_pct": 20,
+    "min_rooms": 1,
+    "max_rooms": 5,
+    "min_surface_m2": 20,
+    "max_surface_m2": 500,
+    "max_price_usd": 150000
   },
   "scraping": {
-    "sources": ["zonaprop"],
+    "sources": [
+      "zonaprop"
+    ],
     "neighborhoods": [
-      "Caballito", "Almagro", "Villa Crespo", "Flores",
-      "Palermo", "Belgrano", "Recoleta", "Balvanera",
-      "San Telmo", "Barracas", "Villa Urquiza", "Coghlan",
-      "Nunez", "Saavedra", "Paternal", "Villa del Parque",
-      "Monte Castro", "Liniers", "Mataderos", "Villa Lugano"
+      "Caballito",
+      "Almagro",
+      "Villa Crespo",
+      "Flores",
+      "Palermo",
+      "Belgrano",
+      "Recoleta",
+      "Balvanera",
+      "San Telmo",
+      "Barracas",
+      "Villa Urquiza",
+      "Coghlan",
+      "Nunez",
+      "Saavedra",
+      "Paternal",
+      "Villa del Parque",
+      "Monte Castro",
+      "Liniers",
+      "Mataderos",
+      "Villa Lugano"
     ],
     "max_pages": 1
   }
