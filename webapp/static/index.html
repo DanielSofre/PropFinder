@@ -116,6 +116,14 @@
                 <option :value="n" x-text="n"></option>
               </template>
             </select>
+            <select class="form-select form-select-sm" style="width:auto" x-model="filterCondition" @change="applyFilters()">
+              <option value="">Todas las condiciones</option>
+              <option value="a reciclar">A reciclar</option>
+              <option value="a refaccionar">A refaccionar</option>
+              <option value="a estrenar">A estrenar</option>
+              <option value="en pozo">En pozo</option>
+              <option value="en construccion">En construcción</option>
+            </select>
           </div>
         </div>
         <div class="card-body p-0">
@@ -130,12 +138,13 @@
                   <th>USD/m² prop.</th>
                   <th>USD/m² media</th>
                   <th>Amb.</th>
+                  <th>Condición</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
                 <template x-if="filteredOpportunities.length === 0">
-                  <tr><td colspan="8" class="text-center text-muted py-4">Sin oportunidades. Ejecutá un scraping.</td></tr>
+                  <tr><td colspan="9" class="text-center text-muted py-4">Sin oportunidades. Ejecutá un scraping.</td></tr>
                 </template>
                 <template x-for="opp in filteredOpportunities" :key="opp.opp_id">
                   <tr>
@@ -155,7 +164,68 @@
                     </td>
                     <td x-text="opp.rooms"></td>
                     <td>
+                      <span x-show="opp.condition" class="badge bg-secondary text-capitalize" x-text="opp.condition"></span>
+                    </td>
+                    <td>
                       <a :href="opp.url" target="_blank" class="listing-link" title="Ver en Zonaprop">
+                        <i class="bi bi-box-arrow-up-right"></i>
+                      </a>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Condition listings panel (shown below when a condition is selected) -->
+    <div class="col-12" x-show="filterCondition && conditionListings.length > 0">
+      <div class="card">
+        <div class="card-header">
+          <i class="bi bi-tag me-2"></i>Todos los listings con condición
+          <span class="badge bg-secondary ms-1 text-capitalize" x-text="filterCondition"></span>
+          <span class="text-muted ms-2 small" x-text="'(' + conditionListings.length + ' resultados)'"></span>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-sm mb-0 align-middle">
+              <thead>
+                <tr>
+                  <th>Descuento</th>
+                  <th>Barrio</th>
+                  <th>Precio USD</th>
+                  <th>m² hom.</th>
+                  <th>USD/m² prop.</th>
+                  <th>USD/m² media</th>
+                  <th>Amb.</th>
+                  <th>Condición</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="l in conditionListings" :key="l.id">
+                  <tr>
+                    <td>
+                      <span x-show="l.discount_percentage != null" class="badge badge-discount rounded-pill px-3 py-1"
+                            :class="l.discount_percentage >= 35 ? 'discount-high' : l.discount_percentage >= 25 ? 'discount-med' : 'discount-low'"
+                            x-text="l.discount_percentage != null ? l.discount_percentage.toFixed(1) + '%' : '—'"></span>
+                      <span x-show="l.discount_percentage == null" class="text-muted">—</span>
+                    </td>
+                    <td x-text="l.neighborhood"></td>
+                    <td x-text="'$' + l.price_usd.toLocaleString('es-AR')"></td>
+                    <td x-text="l.surface_m2.toFixed(0)"></td>
+                    <td x-text="'$' + l.price_m2.toFixed(0)"></td>
+                    <td>
+                      <span class="text-muted" x-text="l.avg_price_m2 ? '$' + Number(l.avg_price_m2).toLocaleString('es-AR') : '—'"></span>
+                    </td>
+                    <td x-text="l.rooms"></td>
+                    <td>
+                      <span x-show="l.condition" class="badge bg-secondary text-capitalize" x-text="l.condition"></span>
+                    </td>
+                    <td>
+                      <a :href="l.url" target="_blank" class="listing-link" title="Ver en Zonaprop">
                         <i class="bi bi-box-arrow-up-right"></i>
                       </a>
                     </td>
@@ -323,6 +393,8 @@ function app() {
     filteredOpportunities: [],
     allNeighborhoods: [],
     filterNeighborhood: '',
+    filterCondition: '',
+    conditionListings: [],
     sortKey: 'discount_percentage',
     sortDir: -1,
     pricingMode: 'referencia',
@@ -377,18 +449,29 @@ function app() {
       await this.loadOpportunities();
     },
 
-    applyFilters() {
+    async applyFilters() {
       let list = [...this.opportunities];
       if (this.filterNeighborhood)
         list = list.filter(o => o.neighborhood === this.filterNeighborhood);
+      if (this.filterCondition)
+        list = list.filter(o => o.condition === this.filterCondition);
       list.sort((a, b) => this.sortDir * (a[this.sortKey] > b[this.sortKey] ? 1 : -1));
       this.filteredOpportunities = list;
+
+      // Load all listings for the selected condition (regardless of discount)
+      if (this.filterCondition) {
+        const r = await fetch(`/api/listings?condition=${encodeURIComponent(this.filterCondition)}&pricing=${this.pricingMode}`);
+        const data = await r.json();
+        this.conditionListings = (data.listings || []).sort((a, b) => a.price_m2 - b.price_m2);
+      } else {
+        this.conditionListings = [];
+      }
     },
 
-    sortBy(key) {
+    async sortBy(key) {
       if (this.sortKey === key) this.sortDir *= -1;
       else { this.sortKey = key; this.sortDir = -1; }
-      this.applyFilters();
+      await this.applyFilters();
     },
 
     async saveConfig() {
@@ -398,6 +481,7 @@ function app() {
         body: JSON.stringify(this.cfg),
       });
       bootstrap.Modal.getInstance(document.getElementById('configModal')).hide();
+      await this.loadOpportunities();
     },
 
     selectAllNeighborhoods() {

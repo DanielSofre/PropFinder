@@ -94,6 +94,11 @@ class DatabaseManager:
         sql = _SCHEMA_PATH.read_text(encoding="utf-8")
         with self._conn.cursor() as cur:
             cur.execute(sql)
+            # Migration: add condition column to existing databases
+            cur.execute("""
+                ALTER TABLE listings
+                ADD COLUMN IF NOT EXISTS condition VARCHAR(50) NOT NULL DEFAULT '';
+            """)
         self._conn.commit()
         logger.info("Database schema verified / initialised.")
 
@@ -112,10 +117,10 @@ class DatabaseManager:
         sql_upsert = """
             INSERT INTO listings
                 (source, title, price_usd, surface_m2, rooms,
-                 neighborhood, price_m2, url, first_seen, last_seen)
+                 neighborhood, condition, price_m2, url, first_seen, last_seen)
             VALUES
                 (%(source)s, %(title)s, %(price_usd)s, %(surface_m2)s,
-                 %(rooms)s, %(neighborhood)s, %(price_m2)s, %(url)s,
+                 %(rooms)s, %(neighborhood)s, %(condition)s, %(price_m2)s, %(url)s,
                  %(first_seen)s, %(last_seen)s)
             ON CONFLICT (url) DO UPDATE
                 SET last_seen = EXCLUDED.last_seen,
@@ -135,6 +140,7 @@ class DatabaseManager:
                         "surface_m2":   listing.surface_m2,
                         "rooms":        listing.rooms,
                         "neighborhood": listing.neighborhood,
+                        "condition":    listing.condition,
                         "price_m2":     listing.price_m2,
                         "url":          listing.url,
                         "first_seen":   listing.first_seen,
@@ -201,7 +207,7 @@ class DatabaseManager:
             cur.execute(
                 """
                 SELECT id, source, title, price_usd, surface_m2, rooms,
-                       neighborhood, price_m2, url, first_seen, last_seen
+                       neighborhood, condition, price_m2, url, first_seen, last_seen
                 FROM listings
                 ORDER BY last_seen DESC
                 """
@@ -221,6 +227,7 @@ class DatabaseManager:
                 int(row["rooms"] or 0),
                 str(row["neighborhood"] or ""),
                 str(row["url"]),
+                str(row.get("condition") or ""),
             )
             # Restore DB-persisted timestamps and primary key
             lst.first_seen = row["first_seen"]
@@ -322,6 +329,7 @@ class DatabaseManager:
                 l.neighborhood,
                 l.price_m2,
                 l.url,
+                l.condition,
                 np.avg_price_m2
             FROM opportunities o
             JOIN listings l ON l.id = o.listing_id

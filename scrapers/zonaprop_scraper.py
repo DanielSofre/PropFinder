@@ -263,6 +263,29 @@ def _extract_from_next_data(next_data: dict, neighborhood: str) -> list[dict]:
                 or posting.get("description", "Departamento en venta")
             )
 
+            # --- Condition ---
+            condition = ""
+            for feat in posting.get("features", []):
+                label = str(feat.get("label", "")).lower()
+                value = str(feat.get("value", "")).lower()
+                if "estado" in label or "condici" in label:
+                    condition = _parse_condition(value)
+                    break
+            if not condition:
+                # fallback: search all feature values for known keywords
+                all_text = " ".join(
+                    str(f.get("label", "")) + " " + str(f.get("value", ""))
+                    for f in posting.get("features", [])
+                ).lower()
+                if "a reciclar" in all_text or "para reciclar" in all_text or "a refaccionar" in all_text:
+                    condition = "a reciclar"
+                elif "a estrenar" in all_text:
+                    condition = "a estrenar"
+                elif "en pozo" in all_text:
+                    condition = "en pozo"
+                elif "en construcci" in all_text:
+                    condition = "en construccion"
+
             raw_listings.append(
                 {
                     "title":        title,
@@ -271,6 +294,7 @@ def _extract_from_next_data(next_data: dict, neighborhood: str) -> list[dict]:
                     "surface_m2":   surface_m2,
                     "rooms":        rooms,
                     "neighborhood": barrio or neighborhood,
+                    "condition":    condition,
                     "url":          url,
                 }
             )
@@ -376,6 +400,18 @@ def _extract_from_dom(soup: BeautifulSoup, neighborhood: str) -> list[dict]:
             )
             title = title_el.get_text(strip=True) if title_el else "Departamento en venta"
 
+            # --- Condition (DOM fallback: search badge/feature text) ---
+            condition = ""
+            card_text = card.get_text(" ", strip=True).lower()
+            if "a reciclar" in card_text or "para reciclar" in card_text or "a refaccionar" in card_text:
+                condition = "a reciclar"
+            elif "a estrenar" in card_text:
+                condition = "a estrenar"
+            elif "en pozo" in card_text:
+                condition = "en pozo"
+            elif "en construcci" in card_text:
+                condition = "en construccion"
+
             raw_listings.append(
                 {
                     "title":        title,
@@ -384,6 +420,7 @@ def _extract_from_dom(soup: BeautifulSoup, neighborhood: str) -> list[dict]:
                     "surface_m2":   surface_m2,
                     "rooms":        rooms,
                     "neighborhood": barrio,
+                    "condition":    condition,
                     "url":          url,
                 }
             )
@@ -505,6 +542,7 @@ class ZonapropScraper(BaseScraper):
                             surface_m2=item["surface_m2"],
                             rooms=item["rooms"],
                             neighborhood=item["neighborhood"],
+                            condition=item.get("condition", ""),
                             url=url_clean,
                         )
                         if listing.is_valid():

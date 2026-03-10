@@ -30,6 +30,7 @@ class Listing:
     rooms: int
     neighborhood: str
     url: str
+    condition: str = ""
 
     # Derived / DB fields
     price_m2: float = field(init=False)
@@ -74,6 +75,7 @@ class Listing:
             "surface_m2": self.surface_m2,
             "rooms": self.rooms,
             "neighborhood": self.neighborhood,
+            "condition": self.condition,
             "price_m2": self.price_m2,
             "url": self.url,
             "first_seen": self.first_seen.isoformat() if self.first_seen else None,
