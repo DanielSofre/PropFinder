@@ -139,6 +139,63 @@ def build_analysis_dataframe(
     return df
 
 
+def compute_market_averages(
+    listings: list[Listing],
+    fallback: dict[str, float],
+    min_listings: int = 10,
+) -> dict[str, float]:
+    """
+    Compute median USD/m² per neighbourhood from scraped listings.
+
+    For neighbourhoods with fewer than ``min_listings`` samples the value from
+    ``fallback`` (i.e. ``neighborhood_prices.json``) is used instead, so there
+    is always a reference price available.
+
+    Parameters
+    ----------
+    listings    : freshly scraped (or DB-loaded) listing objects
+    fallback    : static reference prices (from neighborhood_prices.json)
+    min_listings: minimum number of valid listings required to trust the
+                  computed median (default: 10)
+
+    Returns
+    -------
+    dict mapping neighbourhood name → reference USD/m²
+    """
+    if not listings:
+        return dict(fallback)
+
+    rows = [
+        {"neighborhood": lst.neighborhood, "price_m2": lst.price_m2}
+        for lst in listings
+        if lst.price_m2 > 0 and lst.neighborhood
+    ]
+    if not rows:
+        return dict(fallback)
+
+    df = pd.DataFrame(rows)
+    df.loc[:, "price_m2"] = pd.to_numeric(df["price_m2"], errors="coerce")
+    df = df.dropna(subset=["price_m2"])
+
+    computed: dict[str, float] = {}
+    for neighborhood, group in df.groupby("neighborhood"):
+        if len(group) >= min_listings:
+            computed[str(neighborhood)] = round(float(group["price_m2"].median()), 2)
+
+    # Merge: computed takes priority, fallback fills the gaps
+    result = dict(fallback)
+    result.update(computed)
+
+    computed_count = len(computed)
+    fallback_count = len(result) - computed_count
+    logger.info(
+        "Market averages: %d computed from listings, %d from JSON fallback.",
+        computed_count,
+        fallback_count,
+    )
+    return result
+
+
 def summarise_by_neighborhood(df: pd.DataFrame) -> pd.DataFrame:
     """
     Return a summary DataFrame with per-neighbourhood listing statistics.

@@ -37,6 +37,11 @@
                          border: 1px solid #3a3d4a; font-size: .8rem; user-select: none; transition: all .15s; }
     .neighborhood-chip.selected { background: #5b8dee; border-color: #5b8dee; color: #fff; }
     .neighborhood-chip:not(.selected) { background: #20243a; color: #a0aec0; }
+    .pricing-chip { cursor: pointer; padding: .3rem .9rem; border-radius: 20px;
+                    border: 1px solid #3a3d4a; font-size: .8rem; font-weight: 600;
+                    user-select: none; transition: all .15s; }
+    .pricing-chip.active { background: #5b8dee; border-color: #5b8dee; color: #fff; }
+    .pricing-chip:not(.active) { background: #20243a; color: #a0aec0; }
     a.listing-link { color: #5b8dee; text-decoration: none; }
     a.listing-link:hover { text-decoration: underline; }
     .section-title { font-size: 1rem; font-weight: 600; color: #a0aec0; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 1rem; }
@@ -95,9 +100,16 @@
     <!-- Left: Opportunities table -->
     <div class="col-lg-8">
       <div class="card h-100">
-        <div class="card-header d-flex justify-content-between align-items-center">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
           <span><i class="bi bi-graph-up-arrow me-2 text-success"></i>Oportunidades detectadas</span>
-          <div class="d-flex gap-2 align-items-center">
+          <div class="d-flex gap-2 align-items-center flex-wrap">
+            <!-- Pricing mode toggle -->
+            <div class="d-flex gap-1" title="Referencia: precios del índice Zonaprop. Mercado: mediana calculada de los listings scrapeados.">
+              <span class="pricing-chip" :class="pricingMode === 'referencia' ? 'active' : ''"
+                    @click="setPricingMode('referencia')">Referencia</span>
+              <span class="pricing-chip" :class="pricingMode === 'mercado' ? 'active' : ''"
+                    @click="setPricingMode('mercado')">Mercado</span>
+            </div>
             <select class="form-select form-select-sm" style="width:auto" x-model="filterNeighborhood" @change="applyFilters()">
               <option value="">Todos los barrios</option>
               <template x-for="n in allNeighborhoods" :key="n">
@@ -139,7 +151,7 @@
                       <span x-text="'$' + opp.price_m2.toFixed(0)"></span>
                     </td>
                     <td>
-                      <span class="text-muted" x-text="neighborhoodPrices[opp.neighborhood] ? '$' + neighborhoodPrices[opp.neighborhood].toLocaleString('es-AR') : '—'"></span>
+                      <span class="text-muted" x-text="opp.avg_price_m2 ? '$' + Number(opp.avg_price_m2).toLocaleString('es-AR') : '—'"></span>
                     </td>
                     <td x-text="opp.rooms"></td>
                     <td>
@@ -313,6 +325,7 @@ function app() {
     filterNeighborhood: '',
     sortKey: 'discount_percentage',
     sortDir: -1,
+    pricingMode: 'referencia',
     stats: { opportunities: 0, listings: 0, top_discount: 0, neighborhoods: 0 },
     cfg: {
       surface_weights: { covered: 1.0, semicovered: 0.5, uncovered: 0.3 },
@@ -346,7 +359,7 @@ function app() {
 
     async loadOpportunities() {
       const [oppR, listR] = await Promise.all([
-        fetch('/api/opportunities'),
+        fetch(`/api/opportunities?pricing=${this.pricingMode}`),
         fetch('/api/listings'),
       ]);
       const oppData = await oppR.json();
@@ -357,6 +370,11 @@ function app() {
       this.stats.top_discount = this.opportunities.length
         ? this.opportunities[0].discount_percentage.toFixed(1) : 0;
       this.applyFilters();
+    },
+
+    async setPricingMode(mode) {
+      this.pricingMode = mode;
+      await this.loadOpportunities();
     },
 
     applyFilters() {

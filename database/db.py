@@ -292,6 +292,17 @@ class DatabaseManager:
             logger.exception("Failed to save opportunity for listing_id=%s", listing_id)
             return None
 
+    def clear_opportunities(self) -> None:
+        """Delete all rows from the opportunities table."""
+        try:
+            with self._conn.cursor() as cur:
+                cur.execute("DELETE FROM opportunities")
+            self._conn.commit()
+            logger.info("Cleared all existing opportunities.")
+        except Exception:
+            self._conn.rollback()
+            logger.exception("Failed to clear opportunities.")
+
     def get_opportunities(self) -> list[dict]:
         """
         Return all opportunities joined with their listing details, sorted by
@@ -310,9 +321,11 @@ class DatabaseManager:
                 l.rooms,
                 l.neighborhood,
                 l.price_m2,
-                l.url
+                l.url,
+                np.avg_price_m2
             FROM opportunities o
             JOIN listings l ON l.id = o.listing_id
+            LEFT JOIN neighborhood_prices np ON np.neighborhood = l.neighborhood
             ORDER BY o.discount_percentage DESC
         """
         with self._conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:

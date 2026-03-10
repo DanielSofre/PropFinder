@@ -43,6 +43,7 @@ from analysis.opportunity_detector import (
 )
 from analysis.price_calculator import (
     build_analysis_dataframe,
+    compute_market_averages,
     load_neighborhood_averages,
     summarise_by_neighborhood,
 )
@@ -97,12 +98,51 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Scrape and analyse without persisting to the database.",
     )
+    parser.add_argument(
+        "--redetect-only",
+        action="store_true",
+        help="Re-run opportunity detection on existing DB listings (no scraping).",
+    )
     return parser.parse_args()
 
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
+def _redetect_only(neighbourhood_averages: dict) -> None:
+    """Re-detect opportunities from existing DB listings without scraping."""
+    logger.info("--redetect-only: loading listings from database…")
+    try:
+        with DatabaseManager() as db:
+            db.initialize_schema()
+            all_listings = db.get_all_listings()
+            logger.info("Loaded %d listings from DB.", len(all_listings))
+
+            # Compute market averages from existing listings, fallback to JSON
+            neighbourhood_averages = compute_market_averages(all_listings, neighbourhood_averages)
+            db.update_neighborhood_prices(neighbourhood_averages)
+
+            opportunities = detect_opportunities(all_listings, neighbourhood_averages)
+
+            db.clear_opportunities()
+            saved_opps = 0
+            for opp in opportunities:
+                lst = opp["listing"]
+                if lst.id:
+                    db.save_opportunity(lst.id, opp["discount_percentage"])
+                    saved_opps += 1
+
+            logger.info("Saved %d opportunities to PostgreSQL.", saved_opps)
+
+    except Exception:
+        logger.exception("Re-detection failed.")
+        sys.exit(1)
+
+    print_summary(opportunities, total_listings=len(all_listings))
+    for opp in opportunities:
+        print_opportunity(opp)
+
 
 def main() -> None:
     args = _parse_args()
@@ -121,6 +161,10 @@ def main() -> None:
     except (FileNotFoundError, ValueError) as exc:
         logger.error("Configuration error: %s", exc)
         sys.exit(1)
+
+    if args.redetect_only:
+        _redetect_only(neighbourhood_averages)
+        return
 
     neighbourhoods = list(neighbourhood_averages.keys())
     logger.info(
@@ -161,6 +205,11 @@ def main() -> None:
     if not all_listings:
         logger.warning("No listings were scraped. Check network access and scraper selectors.")
         sys.exit(0)
+
+    # ------------------------------------------------------------------ #
+    # 2b. Compute market averages from scraped data (fallback to JSON)    #
+    # ------------------------------------------------------------------ #
+    neighbourhood_averages = compute_market_averages(all_listings, neighbourhood_averages)
 
     # ------------------------------------------------------------------ #
     # 3. Persist listings (unless --dry-run)                              #

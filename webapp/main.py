@@ -33,6 +33,8 @@ from fastapi.staticfiles import StaticFiles
 # Make sure the project root is importable
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from analysis.opportunity_detector import detect_opportunities
+from analysis.price_calculator import compute_market_averages
 from config.config_loader import get_config, save_config
 from database.db import DatabaseManager
 
@@ -106,11 +108,10 @@ async def api_save_config(body: dict):
 
 @app.get("/api/neighborhoods")
 async def api_neighborhoods():
-    cfg = get_config()
     nb_path = Path(__file__).parent.parent / "config" / "neighborhood_prices.json"
     prices = json.loads(nb_path.read_text(encoding="utf-8"))
     return {
-        "neighborhoods": cfg["scraping"]["neighborhoods"],
+        "neighborhoods": sorted(prices.keys()),
         "avg_prices": prices,
     }
 
@@ -160,13 +161,40 @@ async def api_listings(
 # ---------------------------------------------------------------------------
 
 @app.get("/api/opportunities")
-async def api_opportunities():
+async def api_opportunities(pricing: str = "referencia"):
     try:
-        with DatabaseManager() as db:
-            rows = db.get_opportunities()
+        if pricing == "mercado":
+            nb_path = Path(__file__).parent.parent / "config" / "neighborhood_prices.json"
+            fallback = json.loads(nb_path.read_text(encoding="utf-8"))
+            with DatabaseManager() as db:
+                listings = db.get_all_listings()
+            averages = compute_market_averages(listings, fallback)
+            raw_opps = detect_opportunities(listings, averages)
+            rows = [
+                {
+                    "opp_id":              opp["listing"].id,
+                    "discount_percentage": opp["discount_percentage"],
+                    "detected_at":         None,
+                    "listing_id":          opp["listing"].id,
+                    "source":              opp["listing"].source,
+                    "title":               opp["listing"].title,
+                    "price_usd":           opp["listing"].price_usd,
+                    "surface_m2":          opp["listing"].surface_m2,
+                    "rooms":               opp["listing"].rooms,
+                    "neighborhood":        opp["listing"].neighborhood,
+                    "price_m2":            round(opp["listing"].price_m2, 0),
+                    "url":                 opp["listing"].url,
+                    "avg_price_m2":        opp["avg_price_m2"],
+                }
+                for opp in raw_opps
+            ]
+            return {"opportunities": rows, "total": len(rows)}
+        else:
+            with DatabaseManager() as db:
+                rows = db.get_opportunities()
+            return {"opportunities": rows, "total": len(rows)}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
-    return {"opportunities": rows, "total": len(rows)}
 
 
 # ---------------------------------------------------------------------------
