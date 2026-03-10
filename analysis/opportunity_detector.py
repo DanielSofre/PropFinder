@@ -178,11 +178,12 @@ def print_summary(opportunities: list[dict], total_listings: int) -> None:
     print(f"{'═' * 56}")
 
     if not opportunities:
+        t = _thresholds()
         print("  No opportunities matched the current filters.")
-        print(f"  Filters: rooms {MIN_ROOMS}–{MAX_ROOMS}, "
-              f"surface {MIN_SURFACE_M2:.0f}–{MAX_SURFACE_M2:.0f} m², "
-              f"price < USD {MAX_PRICE_USD:,.0f}, "
-              f"discount > {int((1 - OPPORTUNITY_THRESHOLD) * 100)}%")
+        print(f"  Filters: rooms {t['min_rooms']}–{t['max_rooms']}, "
+              f"surface {t['min_surface_m2']:.0f}–{t['max_surface_m2']:.0f} m², "
+              f"price < USD {t['max_price_usd']:,.0f}, "
+              f"discount > {t['min_discount_pct']:.0f}%")
         return
 
     print(
