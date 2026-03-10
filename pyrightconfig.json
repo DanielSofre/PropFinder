@@ -2,5 +2,5 @@
   "venvPath": ".",
   "venv": ".venv",
   "pythonVersion": "3.12",
-  "pythonPlatform": "Darwin"
+  "pythonPlatform": "Windows"
 }
