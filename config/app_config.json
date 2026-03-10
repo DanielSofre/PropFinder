@@ -1,0 +1,26 @@
+{
+  "surface_weights": {
+    "covered":    1.00,
+    "semicovered": 0.50,
+    "uncovered":  0.30
+  },
+  "opportunity": {
+    "min_discount_pct": 20.0,
+    "min_rooms": 2,
+    "max_rooms": 3,
+    "min_surface_m2": 35.0,
+    "max_surface_m2": 90.0,
+    "max_price_usd": 150000.0
+  },
+  "scraping": {
+    "sources": ["zonaprop"],
+    "neighborhoods": [
+      "Caballito", "Almagro", "Villa Crespo", "Flores",
+      "Palermo", "Belgrano", "Recoleta", "Balvanera",
+      "San Telmo", "Barracas", "Villa Urquiza", "Coghlan",
+      "Nunez", "Saavedra", "Paternal", "Villa del Parque",
+      "Monte Castro", "Liniers", "Mataderos", "Villa Lugano"
+    ],
+    "max_pages": 1
+  }
+}
