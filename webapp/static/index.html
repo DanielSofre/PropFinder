@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PropFinder — Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" />
+  <style>
+    body { background: #0f1117; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; }
+    .navbar { background: #1a1d27 !important; border-bottom: 1px solid #2a2d3a; }
+    .navbar-brand { font-weight: 700; color: #5b8dee !important; letter-spacing: 1px; }
+    .card { background: #1a1d27; border: 1px solid #2a2d3a; border-radius: 12px; }
+    .card-header { background: #20243a; border-bottom: 1px solid #2a2d3a; font-weight: 600; }
+    .table { color: #e0e0e0; }
+    .table thead th { background: #20243a; color: #a0aec0; font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; border-color: #2a2d3a; }
+    .table tbody tr { border-color: #2a2d3a; transition: background .15s; }
+    .table tbody tr:hover { background: #20243a; }
+    .badge-discount { font-size: .9rem; font-weight: 700; }
+    .discount-high { background: #1a4731; color: #4ade80; }
+    .discount-med  { background: #2d3a1a; color: #a3e635; }
+    .discount-low  { background: #3a2d1a; color: #fb923c; }
+    .form-control, .form-select { background: #20243a; border-color: #3a3d4a; color: #e0e0e0; }
+    .form-control:focus, .form-select:focus { background: #20243a; border-color: #5b8dee; color: #e0e0e0; box-shadow: 0 0 0 .2rem rgba(91,141,238,.25); }
+    .form-range { accent-color: #5b8dee; }
+    .btn-primary { background: #5b8dee; border-color: #5b8dee; }
+    .btn-primary:hover { background: #4a7dd9; border-color: #4a7dd9; }
+    .btn-success { background: #22c55e; border-color: #22c55e; color: #000; }
+    .stat-card { text-align: center; padding: 1.2rem; }
+    .stat-card .stat-num { font-size: 2.2rem; font-weight: 700; color: #5b8dee; }
+    .stat-card .stat-label { color: #718096; font-size: .85rem; }
+    #log-box { background: #0d1117; border: 1px solid #2a2d3a; border-radius: 8px;
+               font-family: 'Courier New', monospace; font-size: .8rem; color: #a0f0a0;
+               height: 200px; overflow-y: auto; padding: .75rem; }
+    .neighborhood-grid { display: flex; flex-wrap: wrap; gap: .4rem; }
+    .neighborhood-chip { cursor: pointer; padding: .25rem .7rem; border-radius: 20px;
+                         border: 1px solid #3a3d4a; font-size: .8rem; user-select: none; transition: all .15s; }
+    .neighborhood-chip.selected { background: #5b8dee; border-color: #5b8dee; color: #fff; }
+    .neighborhood-chip:not(.selected) { background: #20243a; color: #a0aec0; }
+    a.listing-link { color: #5b8dee; text-decoration: none; }
+    a.listing-link:hover { text-decoration: underline; }
+    .section-title { font-size: 1rem; font-weight: 600; color: #a0aec0; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 1rem; }
+    label, .form-label, .form-check-label { color: #e0e0e0 !important; }
+    .text-muted { color: #8a9ab5 !important; }
+    .small.text-muted { color: #8a9ab5 !important; }
+  </style>
+</head>
+<body x-data="app()" x-init="init()">
+
+<!-- Navbar -->
+<nav class="navbar navbar-dark px-4 py-2">
+  <span class="navbar-brand"><i class="bi bi-house-heart-fill me-2"></i>PropFinder</span>
+  <div class="d-flex gap-2">
+    <button class="btn btn-sm btn-outline-secondary" @click="loadOpportunities()">
+      <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
+    </button>
+    <button class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#configModal">
+      <i class="bi bi-sliders me-1"></i>Configuración
+    </button>
+  </div>
+</nav>
+
+<div class="container-fluid px-4 py-3">
+
+  <!-- Stats row -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="card stat-card">
+        <div class="stat-num" x-text="stats.opportunities">—</div>
+        <div class="stat-label">Oportunidades</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card stat-card">
+        <div class="stat-num" x-text="stats.listings">—</div>
+        <div class="stat-label">Propiedades analizadas</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card stat-card">
+        <div class="stat-num" x-text="stats.top_discount + '%'">—</div>
+        <div class="stat-label">Mayor descuento</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card stat-card">
+        <div class="stat-num" x-text="stats.neighborhoods">—</div>
+        <div class="stat-label">Barrios monitoreados</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3">
+
+    <!-- Left: Opportunities table -->
+    <div class="col-lg-8">
+      <div class="card h-100">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-graph-up-arrow me-2 text-success"></i>Oportunidades detectadas</span>
+          <div class="d-flex gap-2 align-items-center">
+            <select class="form-select form-select-sm" style="width:auto" x-model="filterNeighborhood" @change="applyFilters()">
+              <option value="">Todos los barrios</option>
+              <template x-for="n in allNeighborhoods" :key="n">
+                <option :value="n" x-text="n"></option>
+              </template>
+            </select>
+          </div>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-sm mb-0 align-middle">
+              <thead>
+                <tr>
+                  <th @click="sortBy('discount_percentage')" style="cursor:pointer">Descuento <i class="bi bi-arrow-down-up"></i></th>
+                  <th>Barrio</th>
+                  <th @click="sortBy('price_usd')" style="cursor:pointer">Precio USD <i class="bi bi-arrow-down-up"></i></th>
+                  <th>m² hom.</th>
+                  <th>USD/m² prop.</th>
+                  <th>USD/m² media</th>
+                  <th>Amb.</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-if="filteredOpportunities.length === 0">
+                  <tr><td colspan="8" class="text-center text-muted py-4">Sin oportunidades. Ejecutá un scraping.</td></tr>
+                </template>
+                <template x-for="opp in filteredOpportunities" :key="opp.opp_id">
+                  <tr>
+                    <td>
+                      <span class="badge badge-discount rounded-pill px-3 py-1"
+                            :class="opp.discount_percentage >= 35 ? 'discount-high' : opp.discount_percentage >= 25 ? 'discount-med' : 'discount-low'"
+                            x-text="opp.discount_percentage.toFixed(1) + '%'"></span>
+                    </td>
+                    <td x-text="opp.neighborhood"></td>
+                    <td x-text="'$' + opp.price_usd.toLocaleString('es-AR')"></td>
+                    <td x-text="opp.surface_m2.toFixed(0)"></td>
+                    <td>
+                      <span x-text="'$' + opp.price_m2.toFixed(0)"></span>
+                    </td>
+                    <td>
+                      <span class="text-muted" x-text="neighborhoodPrices[opp.neighborhood] ? '$' + neighborhoodPrices[opp.neighborhood].toLocaleString('es-AR') : '—'"></span>
+                    </td>
+                    <td x-text="opp.rooms"></td>
+                    <td>
+                      <a :href="opp.url" target="_blank" class="listing-link" title="Ver en Zonaprop">
+                        <i class="bi bi-box-arrow-up-right"></i>
+                      </a>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Scraping panel -->
+    <div class="col-lg-4">
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-search me-2"></i>Nuevo scraping</div>
+        <div class="card-body">
+          <div class="mb-3">
+            <div class="section-title">Fuentes</div>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="srcZonaprop" x-model="scrapeForm.sources.zonaprop">
+              <label class="form-check-label" for="srcZonaprop">Zonaprop</label>
+            </div>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="srcArgenprop" x-model="scrapeForm.sources.argenprop" disabled>
+              <label class="form-check-label text-muted" for="srcArgenprop">Argenprop (próximamente)</label>
+            </div>
+          </div>
+          <div class="mb-3">
+            <div class="d-flex justify-content-between mb-1">
+              <div class="section-title mb-0">Barrios</div>
+              <div class="d-flex gap-2">
+                <a href="#" class="small text-primary" @click.prevent="selectAllNeighborhoods()">todos</a>
+                <a href="#" class="small text-secondary" @click.prevent="scrapeForm.neighborhoods = []">ninguno</a>
+              </div>
+            </div>
+            <div class="neighborhood-grid">
+              <template x-for="n in allNeighborhoods" :key="n">
+                <span class="neighborhood-chip"
+                      :class="scrapeForm.neighborhoods.includes(n) ? 'selected' : ''"
+                      @click="toggleNeighborhood(n)"
+                      x-text="n"></span>
+              </template>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small text-muted">Páginas por barrio</label>
+            <input type="number" class="form-control form-control-sm" x-model.number="scrapeForm.max_pages" min="1" max="10" />
+          </div>
+          <button class="btn btn-success w-100" @click="startScraping()"
+                  :disabled="scrapeStatus === 'running'">
+            <span x-show="scrapeStatus !== 'running'"><i class="bi bi-play-fill me-1"></i>Scrapear ahora</span>
+            <span x-show="scrapeStatus === 'running'"><span class="spinner-border spinner-border-sm me-2"></span>Scrapeando...</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Log box -->
+      <div class="card" x-show="scrapeStatus !== 'idle'">
+        <div class="card-header d-flex justify-content-between">
+          <span><i class="bi bi-terminal me-2"></i>Progreso</span>
+          <span class="badge" :class="scrapeStatus === 'done' ? 'bg-success' : scrapeStatus === 'error' ? 'bg-danger' : 'bg-warning text-dark'"
+                x-text="scrapeStatus"></span>
+        </div>
+        <div class="card-body p-2">
+          <div id="log-box" x-ref="logBox">
+            <template x-for="(line, i) in logLines" :key="i">
+              <div x-text="line"></div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Config Modal -->
+<div class="modal fade" id="configModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content" style="background:#1a1d27; border:1px solid #2a2d3a; color:#e0e0e0">
+      <div class="modal-header" style="border-color:#2a2d3a">
+        <h5 class="modal-title"><i class="bi bi-sliders me-2"></i>Configuración</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+
+        <div class="section-title">Pesos de superficie (TTN)</div>
+        <div class="mb-3">
+          <label class="form-label d-flex justify-content-between">
+            <span>Cubiertos</span>
+            <strong x-text="cfg.surface_weights.covered.toFixed(2)"></strong>
+          </label>
+          <input type="range" class="form-range" min="0.5" max="1.5" step="0.05"
+                 x-model.number="cfg.surface_weights.covered" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label d-flex justify-content-between">
+            <span>Semicubiertos</span>
+            <strong x-text="cfg.surface_weights.semicovered.toFixed(2)"></strong>
+          </label>
+          <input type="range" class="form-range" min="0.1" max="1.0" step="0.05"
+                 x-model.number="cfg.surface_weights.semicovered" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label d-flex justify-content-between">
+            <span>Descubiertos</span>
+            <strong x-text="cfg.surface_weights.uncovered.toFixed(2)"></strong>
+          </label>
+          <input type="range" class="form-range" min="0.05" max="0.8" step="0.05"
+                 x-model.number="cfg.surface_weights.uncovered" />
+        </div>
+
+        <hr style="border-color:#2a2d3a" />
+        <div class="section-title">Filtros de oportunidad</div>
+
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="form-label small text-muted">Descuento mínimo (%)</label>
+            <input type="number" class="form-control form-control-sm" min="5" max="60"
+                   x-model.number="cfg.opportunity.min_discount_pct" />
+          </div>
+          <div class="col-6">
+            <label class="form-label small text-muted">Precio máx. (USD)</label>
+            <input type="number" class="form-control form-control-sm"
+                   x-model.number="cfg.opportunity.max_price_usd" />
+          </div>
+          <div class="col-3">
+            <label class="form-label small text-muted">Amb. mín.</label>
+            <input type="number" class="form-control form-control-sm" min="1"
+                   x-model.number="cfg.opportunity.min_rooms" />
+          </div>
+          <div class="col-3">
+            <label class="form-label small text-muted">Amb. máx.</label>
+            <input type="number" class="form-control form-control-sm"
+                   x-model.number="cfg.opportunity.max_rooms" />
+          </div>
+          <div class="col-3">
+            <label class="form-label small text-muted">m² mín.</label>
+            <input type="number" class="form-control form-control-sm"
+                   x-model.number="cfg.opportunity.min_surface_m2" />
+          </div>
+          <div class="col-3">
+            <label class="form-label small text-muted">m² máx.</label>
+            <input type="number" class="form-control form-control-sm"
+                   x-model.number="cfg.opportunity.max_surface_m2" />
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer" style="border-color:#2a2d3a">
+        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-primary btn-sm" @click="saveConfig()">
+          <i class="bi bi-floppy me-1"></i>Guardar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js" defer></script>
+<script>
+function app() {
+  return {
+    opportunities: [],
+    filteredOpportunities: [],
+    allNeighborhoods: [],
+    filterNeighborhood: '',
+    sortKey: 'discount_percentage',
+    sortDir: -1,
+    stats: { opportunities: 0, listings: 0, top_discount: 0, neighborhoods: 0 },
+    cfg: {
+      surface_weights: { covered: 1.0, semicovered: 0.5, uncovered: 0.3 },
+      opportunity: { min_discount_pct: 20, min_rooms: 2, max_rooms: 3, min_surface_m2: 35, max_surface_m2: 90, max_price_usd: 150000 },
+      scraping: { sources: ['zonaprop'], neighborhoods: [], max_pages: 1 }
+    },
+    neighborhoodPrices: {},
+    scrapeForm: { sources: { zonaprop: true, argenprop: false }, neighborhoods: [], max_pages: 1 },
+    scrapeStatus: 'idle',
+    logLines: [],
+    ws: null,
+
+    async init() {
+      await Promise.all([this.loadConfig(), this.loadOpportunities(), this.loadNeighborhoods()]);
+    },
+
+    async loadConfig() {
+      const r = await fetch('/api/config');
+      this.cfg = await r.json();
+      this.scrapeForm.max_pages = this.cfg.scraping.max_pages;
+    },
+
+    async loadNeighborhoods() {
+      const r = await fetch('/api/neighborhoods');
+      const data = await r.json();
+      this.allNeighborhoods = data.neighborhoods;
+      this.neighborhoodPrices = data.avg_prices || {};
+      this.scrapeForm.neighborhoods = [...data.neighborhoods];
+      this.stats.neighborhoods = data.neighborhoods.length;
+    },
+
+    async loadOpportunities() {
+      const [oppR, listR] = await Promise.all([
+        fetch('/api/opportunities'),
+        fetch('/api/listings'),
+      ]);
+      const oppData = await oppR.json();
+      const listData = await listR.json();
+      this.opportunities = oppData.opportunities || [];
+      this.stats.opportunities = this.opportunities.length;
+      this.stats.listings = listData.total || 0;
+      this.stats.top_discount = this.opportunities.length
+        ? this.opportunities[0].discount_percentage.toFixed(1) : 0;
+      this.applyFilters();
+    },
+
+    applyFilters() {
+      let list = [...this.opportunities];
+      if (this.filterNeighborhood)
+        list = list.filter(o => o.neighborhood === this.filterNeighborhood);
+      list.sort((a, b) => this.sortDir * (a[this.sortKey] > b[this.sortKey] ? 1 : -1));
+      this.filteredOpportunities = list;
+    },
+
+    sortBy(key) {
+      if (this.sortKey === key) this.sortDir *= -1;
+      else { this.sortKey = key; this.sortDir = -1; }
+      this.applyFilters();
+    },
+
+    async saveConfig() {
+      await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(this.cfg),
+      });
+      bootstrap.Modal.getInstance(document.getElementById('configModal')).hide();
+    },
+
+    selectAllNeighborhoods() {
+      this.scrapeForm.neighborhoods = [...this.allNeighborhoods];
+    },
+
+    toggleNeighborhood(n) {
+      const idx = this.scrapeForm.neighborhoods.indexOf(n);
+      if (idx >= 0) this.scrapeForm.neighborhoods.splice(idx, 1);
+      else this.scrapeForm.neighborhoods.push(n);
+    },
+
+    async startScraping() {
+      const sources = Object.entries(this.scrapeForm.sources)
+        .filter(([,v]) => v).map(([k]) => k);
+      this.scrapeStatus = 'running';
+      this.logLines = [];
+      this.connectWS();
+      await fetch('/api/scrape', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sources,
+          neighborhoods: this.scrapeForm.neighborhoods,
+          max_pages: this.scrapeForm.max_pages,
+        }),
+      });
+    },
+
+    connectWS() {
+      if (this.ws) this.ws.close();
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      this.ws = new WebSocket(`${proto}://${location.host}/ws/scrape-progress`);
+      this.ws.onmessage = (e) => {
+        this.logLines.push(e.data);
+        this.$nextTick(() => {
+          const box = this.$refs.logBox;
+          if (box) box.scrollTop = box.scrollHeight;
+        });
+        if (e.data.includes('oportunidades detectadas')) {
+          this.scrapeStatus = 'done';
+          setTimeout(() => this.loadOpportunities(), 1000);
+        }
+        if (e.data.includes('❌ Error')) this.scrapeStatus = 'error';
+      };
+      this.ws.onerror = () => { this.scrapeStatus = 'error'; };
+    },
+  };
+}
+</script>
+</body>
+</html>

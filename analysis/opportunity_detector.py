@@ -23,21 +23,14 @@ from typing import Optional
 
 from models.listing import Listing
 from analysis.price_calculator import discount_vs_market
+from config.config_loader import get_config as _get_config
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Thresholds — adjust here or expose via config / CLI flags as needed
-# ---------------------------------------------------------------------------
 
-#: Listing must be priced below this fraction of the neighbourhood average
-OPPORTUNITY_THRESHOLD: float = 0.70   # i.e. discount > 30%
-
-MIN_ROOMS:       int   = 2
-MAX_ROOMS:       int   = 3
-MIN_SURFACE_M2:  float = 35.0
-MAX_SURFACE_M2:  float = 90.0
-MAX_PRICE_USD:   float = 150_000.0
+def _thresholds() -> dict:
+    """Return opportunity thresholds from current config (always fresh)."""
+    return _get_config()["opportunity"]
 
 
 # ---------------------------------------------------------------------------
@@ -50,6 +43,7 @@ def is_opportunity(
 ) -> tuple[bool, Optional[float]]:
     """
     Evaluate a single listing against all opportunity filters.
+    Thresholds are read fresh from config/app_config.json on each call.
 
     Parameters
     ----------
@@ -69,29 +63,26 @@ def is_opportunity(
     if discount is None:
         return False, None
 
+    t = _thresholds()
+    threshold_fraction = 1.0 - (t["min_discount_pct"] / 100.0)
+
     # Price filter: must be strictly below the threshold
-    if listing.price_m2 >= OPPORTUNITY_THRESHOLD * avg_price_m2:
+    if listing.price_m2 >= threshold_fraction * avg_price_m2:
         return False, discount
 
     # Room count filter
-    if not (MIN_ROOMS <= listing.rooms <= MAX_ROOMS):
-        logger.debug(
-            "FILTERED (rooms=%d) %s", listing.rooms, listing.url
-        )
+    if not (t["min_rooms"] <= listing.rooms <= t["max_rooms"]):
+        logger.debug("FILTERED (rooms=%d) %s", listing.rooms, listing.url)
         return False, discount
 
     # Surface filter
-    if not (MIN_SURFACE_M2 <= listing.surface_m2 <= MAX_SURFACE_M2):
-        logger.debug(
-            "FILTERED (surface=%.0f m²) %s", listing.surface_m2, listing.url
-        )
+    if not (t["min_surface_m2"] <= listing.surface_m2 <= t["max_surface_m2"]):
+        logger.debug("FILTERED (surface=%.0f m²) %s", listing.surface_m2, listing.url)
         return False, discount
 
     # Absolute price ceiling
-    if listing.price_usd >= MAX_PRICE_USD:
-        logger.debug(
-            "FILTERED (price=%.0f USD) %s", listing.price_usd, listing.url
-        )
+    if listing.price_usd >= t["max_price_usd"]:
+        logger.debug("FILTERED (price=%.0f USD) %s", listing.price_usd, listing.url)
         return False, discount
 
     return True, discount
@@ -187,11 +178,12 @@ def print_summary(opportunities: list[dict], total_listings: int) -> None:
     print(f"{'═' * 56}")
 
     if not opportunities:
+        t = _thresholds()
         print("  No opportunities matched the current filters.")
-        print(f"  Filters: rooms {MIN_ROOMS}–{MAX_ROOMS}, "
-              f"surface {MIN_SURFACE_M2:.0f}–{MAX_SURFACE_M2:.0f} m², "
-              f"price < USD {MAX_PRICE_USD:,.0f}, "
-              f"discount > {int((1 - OPPORTUNITY_THRESHOLD) * 100)}%")
+        print(f"  Filters: rooms {t['min_rooms']}–{t['max_rooms']}, "
+              f"surface {t['min_surface_m2']:.0f}–{t['max_surface_m2']:.0f} m², "
+              f"price < USD {t['max_price_usd']:,.0f}, "
+              f"discount > {t['min_discount_pct']:.0f}%")
         return
 
     print(

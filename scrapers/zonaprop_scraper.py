@@ -39,12 +39,15 @@ logger = logging.getLogger(__name__)
 BASE_DOMAIN = "https://www.zonaprop.com.ar"
 
 # ---------------------------------------------------------------------------
-# Superficie homogénea — pesos por tipo de m² (estándar Tribunal de Tasaciones)
-# Modificá estos valores para ajustar el cálculo de precio/m².
+# Superficie homogénea — pesos leídos desde config/app_config.json
+# Modificalos desde la webapp o directamente en ese archivo.
 # ---------------------------------------------------------------------------
-SURFACE_WEIGHT_COVERED    = 1.00   # m² cubiertos   (living, dormitorios, cocina)
-SURFACE_WEIGHT_SEMICOV    = 0.50   # m² semicubiertos (balcón techado, galería)
-SURFACE_WEIGHT_UNCOVERED  = 0.30   # m² descubiertos (terraza, patio sin techo)
+from config.config_loader import get_config as _get_config
+
+def _surface_weights() -> tuple[float, float, float]:
+    """Return (covered, semicovered, uncovered) weights from current config."""
+    w = _get_config()["surface_weights"]
+    return w["covered"], w["semicovered"], w["uncovered"]
 
 # Neighbourhood name → URL slug mapping.
 # Keys must match those used in neighborhood_prices.json.
@@ -331,11 +334,12 @@ def _extract_from_dom(soup: BeautifulSoup, neighborhood: str) -> list[dict]:
                         rooms = _parse_rooms(text)
 
             # Superficie homogénea (Tribunal de Tasaciones de la Nación)
+            w_cub, w_semi, w_desc = _surface_weights()
             if surface_cub > 0 or surface_semi > 0 or surface_desc > 0:
                 surface_m2 = (
-                    surface_cub  * SURFACE_WEIGHT_COVERED   +
-                    surface_semi * SURFACE_WEIGHT_SEMICOV   +
-                    surface_desc * SURFACE_WEIGHT_UNCOVERED
+                    surface_cub  * w_cub  +
+                    surface_semi * w_semi +
+                    surface_desc * w_desc
                 )
             else:
                 # Sin desglose: usar el total como cubiertos (conservador)
