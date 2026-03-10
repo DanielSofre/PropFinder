@@ -78,6 +78,28 @@ def _build_url(slug: str, page: int) -> str:
     return f"{BASE_DOMAIN}/departamentos-venta-{slug}-pagina-{page}.html"
 
 
+# Canonical neighbourhood names (lowercase) for normalization lookup.
+_CANONICAL_NEIGHBORHOODS = list(NEIGHBORHOOD_SLUGS.keys())
+_CANONICAL_LOWER = {n.lower(): n for n in _CANONICAL_NEIGHBORHOODS}
+
+
+def _normalize_neighborhood(raw: str, fallback: str) -> str:
+    """
+    Map a raw scraped neighbourhood string to one of the canonical neighbourhood
+    names defined in NEIGHBORHOOD_SLUGS.
+
+    Only accepts exact matches (case-insensitive). Any ambiguous string
+    (e.g. "Entre Holmberg y Plaza Saavedra", "Palermo Hollywood") falls back
+    to ``fallback`` — the neighbourhood we were scraping — which is always correct.
+    Substring matching is intentionally avoided to prevent false positives
+    (e.g. "Plaza Saavedra" is NOT necessarily the Saavedra neighbourhood).
+    """
+    if not raw:
+        return fallback
+    canonical = _CANONICAL_LOWER.get(raw.lower())
+    return canonical if canonical else fallback
+
+
 # ---------------------------------------------------------------------------
 # Price parsing helpers
 # ---------------------------------------------------------------------------
@@ -221,11 +243,11 @@ def _extract_from_next_data(next_data: dict, neighborhood: str) -> list[dict]:
 
             # --- Location ---
             location = posting.get("postingLocation", {})
-            barrio = (
+            raw_barrio = (
                 location.get("subdivisionName", {}).get("name", "")
                 or location.get("location", {}).get("name", "")
-                or neighborhood
             )
+            barrio = _normalize_neighborhood(raw_barrio, neighborhood)
 
             # --- URL ---
             url = posting.get("url", "") or posting.get("shareUrl", "")
@@ -324,22 +346,18 @@ def _extract_from_dom(soup: BeautifulSoup, neighborhood: str) -> list[dict]:
             #   "Neuquen 800 Caballito, Capital Federal"  → barrio = "Caballito"
             #   "Nicolas Repetto al 1100 Caballito Norte, Caballito" → barrio = "Caballito"
             loc_el = card.select_one("[class*='location-block']")
-            barrio = neighborhood
+            raw_barrio = ""
             if loc_el:
                 loc_text = loc_el.get_text(" ", strip=True)
                 parts = [p.strip() for p in loc_text.split(",")]
                 if len(parts) >= 2:
-                    # Last part before "Capital Federal" / "CABA" is the canonical barrio
                     candidate = parts[-2].strip() if len(parts) > 2 else parts[0].strip()
-                    # Remove leading street address (anything up to and including the last digit)
                     candidate = re.sub(r'^.*\d+\s*', '', candidate).strip()
-                    if candidate:
-                        barrio = candidate
-                if not barrio or barrio == neighborhood:
-                    # Fallback: take whatever is before the first comma, strip the address
+                    raw_barrio = candidate
+                if not raw_barrio:
                     raw = parts[0] if parts else ""
-                    raw = re.sub(r'^.*\d+\s*', '', raw).strip()
-                    barrio = raw or neighborhood
+                    raw_barrio = re.sub(r'^.*\d+\s*', '', raw).strip()
+            barrio = _normalize_neighborhood(raw_barrio, neighborhood)
 
             # --- URL ---
             link = card.find("a", href=True)

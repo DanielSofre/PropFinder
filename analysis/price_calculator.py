@@ -113,26 +113,26 @@ def build_analysis_dataframe(
         return pd.DataFrame()
 
     rows = [lst.to_dict() for lst in listings]
-    df = pd.DataFrame(rows)
+    df = pd.DataFrame(rows).copy()
 
     # Ensure numeric types
-    df["price_usd"] = pd.to_numeric(df["price_usd"], errors="coerce")
-    df["surface_m2"] = pd.to_numeric(df["surface_m2"], errors="coerce")
+    df.loc[:, "price_usd"] = pd.to_numeric(df["price_usd"], errors="coerce")
+    df.loc[:, "surface_m2"] = pd.to_numeric(df["surface_m2"], errors="coerce")
     rooms_numeric = cast("pd.Series[float]", pd.to_numeric(df["rooms"], errors="coerce"))
-    df["rooms"] = rooms_numeric.fillna(0).astype(int)
-    df["price_m2"] = pd.to_numeric(df["price_m2"], errors="coerce")
+    df.loc[:, "rooms"] = rooms_numeric.fillna(0).astype(int)
+    df.loc[:, "price_m2"] = pd.to_numeric(df["price_m2"], errors="coerce")
 
     # Map neighbourhood averages
-    df["avg_price_m2"] = df["neighborhood"].map(neighbourhood_averages)
+    df.loc[:, "avg_price_m2"] = df["neighborhood"].map(neighbourhood_averages)
 
     # Compute discount
-    df["discount"] = df.apply(
+    df.loc[:, "discount"] = df.apply(
         lambda r: discount_vs_market(r["price_m2"], r["avg_price_m2"])
         if pd.notna(r["avg_price_m2"])
         else None,
         axis=1,
     )
-    df["discount_pct"] = df["discount"].apply(
+    df.loc[:, "discount_pct"] = df["discount"].apply(
         lambda d: f"{d * 100:.1f}%" if d is not None else "N/A"
     )
 
